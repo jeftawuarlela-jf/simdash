@@ -162,19 +162,14 @@ main_content = html.Div([
     dbc.Button("▶  Run Simulation", id="run-btn", color="primary", size="lg",
                className="w-100 mb-4", disabled=True),
 
-    # Status (shows immediately on button click)
+    # Status
     html.Div(id="status-area"),
 
-    # Log + Results wrapped in Loading spinner
-    dcc.Loading(
-        id="loading-results",
-        type="circle",
-        color="#58a6ff",
-        children=html.Div([
-            html.Div(id="log-area"),
-            html.Div(id="results-area"),
-        ]),
-    ),
+    # Log output
+    html.Div(id="log-area"),
+
+    # Results area
+    html.Div(id="results-area"),
 
 ], style={
     "marginLeft": "340px", "padding": "30px 40px",
@@ -188,7 +183,6 @@ app.layout = html.Div([
     main_content,
     dcc.Store(id='csv-store'),        # stores uploaded CSV info
     dcc.Store(id='results-store'),    # stores output directory path
-    dcc.Store(id='run-trigger'),      # triggers simulation after status shown
 ])
 
 # ─────────────────────────────────────────────────────────────
@@ -287,12 +281,11 @@ def handle_upload(contents, filename):
     return f"✓ {filename}", {"contents": contents, "filename": filename}, False
 
 
-# ── Callback 1: fires instantly on button click ──────────────
-# Shows "running" banner immediately and triggers the simulation store.
+# Run simulation
 @callback(
     Output("status-area", "children"),
-    Output("run-trigger", "data"),
-    Output("run-btn", "disabled", allow_duplicate=True),
+    Output("log-area", "children"),
+    Output("results-area", "children"),
     Input("run-btn", "n_clicks"),
     State("csv-store", "data"),
     State("rt-start", "value"),
@@ -306,15 +299,18 @@ def handle_upload(contents, filename):
     State("output-options", "value"),
     prevent_initial_call=True,
 )
-def on_run_clicked(n_clicks, csv_data, rt_start, rt_stop, doi_start, doi_stop,
+def run_simulation(n_clicks, csv_data, rt_start, rt_stop, doi_start, doi_stop,
                    daily_cap, total_cap, start_date_str, end_date_str, output_options):
-    """Validate inputs and immediately show running banner, then trigger simulation."""
-    from datetime import date as date_type
-    rt_start = rt_start or 21
-    rt_stop  = rt_stop  or 22
-    doi_start = doi_start or 27
-    doi_stop  = doi_stop  or 30
 
+    # ── Guard against None values ──
+    rt_start = rt_start or 21
+    rt_stop = rt_stop or 22
+    doi_start = doi_start or 27
+    doi_stop = doi_stop or 30
+    daily_cap = daily_cap or 360
+    total_cap = total_cap or 5100
+
+    # ── Validation ──
     errors = []
     if csv_data is None:
         errors.append("Please upload your CSV data file.")
@@ -324,66 +320,16 @@ def on_run_clicked(n_clicks, csv_data, rt_start, rt_stop, doi_start, doi_stop,
         errors.append("DOI Stop must be greater than DOI Start.")
 
     start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else date(2026, 2, 1)
-    end_date   = datetime.strptime(end_date_str,   "%Y-%m-%d").date() if end_date_str   else date(2026, 3, 31)
+    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else date(2026, 3, 31)
     if end_date <= start_date:
         errors.append("End Date must be after Start Date.")
 
     if errors:
         return (
             dbc.Alert([html.Li(e) for e in errors], color="danger"),
-            no_update,
-            False,
+            None,
+            None,
         )
-
-    # Show running banner and pass all config to trigger store
-    running_banner = dbc.Alert([
-        dbc.Spinner(size="sm", color="light", spinner_style={"marginRight": "10px"}),
-        html.Strong("Simulation is running... "),
-        html.Span("This may take a few minutes depending on the number of scenarios. Please wait.",
-                  style={"opacity": "0.85"}),
-    ], color="warning", style={"display": "flex", "alignItems": "center"})
-
-    trigger_data = {
-        "ts": datetime.now().isoformat(),
-        "csv_data": csv_data,
-        "rt_start": rt_start, "rt_stop": rt_stop,
-        "doi_start": doi_start, "doi_stop": doi_stop,
-        "daily_cap": daily_cap or 360,
-        "total_cap": total_cap or 5100,
-        "start_date_str": start_date_str,
-        "end_date_str": end_date_str,
-        "output_options": output_options or [],
-    }
-    return running_banner, trigger_data, True
-
-
-# ── Callback 2: does the actual simulation work ───────────────
-@callback(
-    Output("log-area", "children"),
-    Output("results-area", "children"),
-    Output("status-area", "children", allow_duplicate=True),
-    Output("run-btn", "disabled", allow_duplicate=True),
-    Input("run-trigger", "data"),
-    prevent_initial_call=True,
-)
-def run_simulation(trigger):
-    """Run the simulation after the UI has shown the running banner."""
-    if trigger is None:
-        from dash import no_update
-        return no_update, no_update, no_update, False
-
-    csv_data       = trigger["csv_data"]
-    rt_start       = trigger["rt_start"]
-    rt_stop        = trigger["rt_stop"]
-    doi_start      = trigger["doi_start"]
-    doi_stop       = trigger["doi_stop"]
-    daily_cap      = trigger["daily_cap"]
-    total_cap      = trigger["total_cap"]
-    start_date_str = trigger["start_date_str"]
-    end_date_str   = trigger["end_date_str"]
-    output_options = trigger["output_options"]
-
-    n_clicks = None  # not used below but kept for signature compatibility
 
     # ── Setup working directories ──
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -421,10 +367,8 @@ def run_simulation(trigger):
     sim_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "simulation_dash.py")
     if not os.path.exists(sim_src):
         return (
-            None,
-            None,
             dbc.Alert("simulation_dash.py not found next to dash_app.py.", color="danger"),
-            False,
+            None, None,
         )
     shutil.copy(sim_src, os.path.join(work_dir, "simulation_dash.py"))
 
@@ -452,7 +396,7 @@ def run_simulation(trigger):
     ])
 
     if not success:
-        return log_section, None, status, False
+        return status, log_section, None
 
     # ── Build results area ──
     results_children = []
@@ -553,7 +497,7 @@ def run_simulation(trigger):
     )
 
     results_area = html.Div(results_children)
-    return log_section, results_area, status, False
+    return status, log_section, results_area
 
 
 # ─────────────────────────────────────────────────────────────
