@@ -564,7 +564,7 @@ def main():
             'Pct_Days_Over_Capacity': round(r['pct_days_over_capacity'], 2),
             'Capacity_Utilization_Pct': round(r['capacity_utilization'], 2),
             'Total_Orders': int(r['total_orders']),
-            'Avg_DOI': round(r['avg_doi'], 2),
+            'StDev_Daily_SKUs': round(r['std_daily_skus'], 2),
             'Overload_Monday': int(r['overload_by_day'].get('Monday', 0)),
             'Overload_Tuesday': int(r['overload_by_day'].get('Tuesday', 0)),
             'Overload_Wednesday': int(r['overload_by_day'].get('Wednesday', 0)),
