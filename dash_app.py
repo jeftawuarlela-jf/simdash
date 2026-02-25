@@ -30,6 +30,7 @@ app = dash.Dash(
     suppress_callback_exceptions=True,
     title="📦 Supply Chain Simulation",
 )
+server = app.server
 
 # ─────────────────────────────────────────────────────────────
 # Sidebar
@@ -252,9 +253,9 @@ app.index_string = '''
 )
 def update_metrics(rt_start, rt_stop, doi_start, doi_stop):
     rt_start = rt_start or 21
-    rt_stop = rt_stop + 1 or 22
+    rt_stop = rt_stop or 22
     doi_start = doi_start or 27
-    doi_stop = doi_stop + 1 or 30
+    doi_stop = doi_stop or 30
     n_rt = max(0, rt_stop - rt_start + 1)
     n_doi = max(0, doi_stop - doi_start + 1)
     return (
@@ -347,8 +348,8 @@ def run_simulation(n_clicks, csv_data, rt_start, rt_stop, doi_start, doi_stop,
     save_daily = "daily" in (output_options or [])
 
     config_content = textwrap.dedent(f"""\
-        REORDER_THRESHOLD_RANGE = range({rt_start}, {rt_stop})
-        TARGET_DOI_RANGE        = range({doi_start}, {doi_stop})
+        REORDER_THRESHOLD_RANGE = range({rt_start}, {rt_stop + 1})
+        TARGET_DOI_RANGE        = range({doi_start}, {doi_stop + 1})
         DAILY_SKU_CAPACITY      = {daily_cap}
         TOTAL_SKU_CAPACITY      = {total_cap}
         START_DATE = ({start_date.year}, {start_date.month}, {start_date.day})
@@ -448,7 +449,7 @@ def run_simulation(n_clicks, csv_data, rt_start, rt_stop, doi_start, doi_stop,
                     html.H4(f"{best.get('Capacity_Utilization_Pct', 0):.1f}%"),
                 ]), className="metric-card"), width=3),
                 dbc.Col(dbc.Card(dbc.CardBody([
-                    html.H6("Avg Inbound SKUs", className="text-muted"),
+                    html.H6("Avg Inbound", className="text-muted"),
                     html.H4(f"{best.get('Avg_Daily_SKUs', 0):.2f}"),
                 ]), className="metric-card"), width=3),
             ], className="mb-4"))
@@ -503,4 +504,4 @@ def run_simulation(n_clicks, csv_data, rt_start, rt_stop, doi_start, doi_stop,
 # Run
 # ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    app.run(debug=True, port=8050)
+    app.run(debug=False, port=8050)
